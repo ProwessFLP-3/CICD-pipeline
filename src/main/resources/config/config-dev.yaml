@@ -1,0 +1,72 @@
+api:
+  id: "18672047"  
+
+http:
+  host: "0.0.0.0"
+  port: "8081"
+  
+https:
+  host: "0.0.0.0"
+  port: "8082"
+  
+tls:
+  type: "JKS"
+  path: "cert/vv-mule-cert-dev.jks"
+  alias: "vv-mule-cert"
+  
+sftpvv:
+  port: "22"
+  filePathFailed: "/DEV/babelway/deliveryorder/fail/" 
+  
+x12:
+  value: "/x12/004010/204.esl"
+  defaultUsageIndicator: "T"
+  interchangeIdQualifierSelf: "ZZ"
+  interchangeIdSelf: "VV"
+  interchangeIdQualifierPartner: "ZZ"
+  interchangeIdPartner: "BLUME"
+  groupIdSelf: "VV"
+  groupIdPartner: "BLUME"
+  componentSeparator: ":"
+  batchOutputEdiMimeType: "APPLICATION_EDIX12"
+  
+httpRequestcwm:
+  host: "vv-cwm-sapi-dev.us-e1.cloudhub.io"
+  port: "443"
+  path: "/api/orders"
+  method: "post"
+  responseTimeout: "30000"
+  frequency: "2000"
+  retryCount: "2"
+  
+httpRequestJohndeere:
+  host: "vv-johndeere-sapi-dev.us-e1.cloudhub.io"
+  port: "443"
+  path: "/api/order-updates"
+  method: "post"
+  responseTimeout: "30000"
+  frequency: "2000"
+  retryCount: "2"
+  
+httpRequestTerminal49:
+  host: "vv-terminal49-sapi-dev.us-e1.cloudhub.io"
+  port: "443"
+  path: "/api/track/order"
+  method: "post"
+  responseTimeout: "30000"
+  frequency: "2000"
+  retryCount: "2"
+ 
+httpRequestEdi:
+  host: "vv-sftp-sapi-dev.us-e1.cloudhub.io"
+  port: "443"
+  path: "/api/orders/blume"
+  method: "post"
+  responseTimeout: "30000"
+  frequency: "2000"
+  retryCount: "2"
+  
+gcp:
+  projectId: "valorvictoria"
+  subscriptionName: "qa-vv-outbound-do-sub"
+  

@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:x12="http://www.mulesoft.org/schema/mule/x12" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
+	xmlns:pubsub="http://www.mulesoft.org/schema/mule/pubsub"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/pubsub http://www.mulesoft.org/schema/mule/pubsub/current/mule-pubsub.xsd
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
+http://www.mulesoft.org/schema/mule/x12 http://www.mulesoft.org/schema/mule/x12/current/mule-x12.xsd">
+	<flow name="post-order-request-flow" doc:id="70620db5-3b64-4687-b269-081da8877b5a" >
+		<ee:transform doc:name="inputPayload" doc:id="96433155-a54a-4cf9-a424-c96c4c0d1bca" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="inputPayload" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    correlationId : vars.correlationId,
+    businessProcessName: "Valor-Victoria",
+    flowName: flow.name,  
+    source: "SFTP",
+    target: "CWM",
+    httpMethod: attributes.method,
+    message: "Received requests form customers for creating shipment",
+    businessObject: []
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Removes empty string key values" doc:id="07de5b21-db6e-4341-9947-3bf975014a2d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+fun treeFilter(value: Any, predicate: (value:Any) -> Boolean) =
+    value  match {
+            case object is Object ->  do {
+               object mapObject ((value, key, index) -> 
+                    (key): treeFilter(value, predicate)
+                )
+                filterObject ((value, key, index) -> predicate(value))
+            }
+            case array is Array -> do {
+                    array map ((item, index) -> treeFilter(item, predicate))
+                                         filter ((item, index) -> predicate(item))                 
+            }
+            else -> $
+    }
+---
+payload treeFilter ((value) -> 
+    value match {
+        case v is Array| Object | Null | "" -> !isEmpty(v)
+        else -> true
+    }
+)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Set CWM Request Payload" doc:id="d4e2f62b-d54a-4fd0-b0ed-0595268b6dfc" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map{
+	"deliveryOrderNumber": $."shipmentNo",
+    "deliveryOrderStatus": $."deliveryOrderStatus" default "DRAFT",
+    "deliveryOrderType": $."shipmentType",
+    "billOfLading": $."billOfLading" default null,
+	"bookingNumber": $."bookingNo" default null,
+	"originUnlocode": "ITSLONGB",
+	"destinationUnlocode": "LBCTLONGB",
+    "invoiceReferenceNumber": $."accountingRefNo",
+    "customerCode":$."customerCode" default "",
+    "customerName":$."customer",
+    "bcoName": $."bcoName",
+    "oceanCarrier":$."oceanCarrier",
+    "voyageNumber":$."voyageNo",
+    "vesselName":$."vesselName",
+    "standardCarrierAlphaCode": $."scac",
+    "cargo":{
+        "quantity":$."pieces" as Number default 1,
+        "quantityUOM": "PIECE",
+        "commodityGoodsNumber":$."commodityGoodsNo" default  "4611110",
+        "freightDescription": $."freightDescription" default "FAK",
+        "commodityClass": $."commodityClass" default "FAK",
+      
+        "isHazmat": $."isHazmat" default false,
+        "grossWeight": $."grossWeight" as Number,
+        "grossWeightUOM": $."weightUOM",
+        "netWeight": $."netWeight" as Number,
+        "netWeightUOM": $."weightUOM",
+        "grossVolume": $."volume" as Number,
+        "grossVolumeUOM": $."volumeUOM" default "MTQ",
+        "isShipmentOverweight": $."isShipmentOverWeight" default false,
+        "packageType": $."packageType" default "TOTAL_LOAD",
+
+    },
+    "container": {
+        "number": $.containerId,
+        "equipmentSizeType": $.equipmentType,
+        "seal": $."sealNo",
+        "isStackable": $."isStackable" default false ,
+        "isLoaded": if($."shipmentType"=="EMPTYRETURN") "N" else "Y"
+    },
+    "stops":[
+            {
+            "stopType":"PICKUP",
+            "stopNumber": 0,
+			"locationName": $."originName",
+			"locationAddress1": $."originAddress",
+			"city": $."originCity",
+			"state": $."originState",
+			"country": $."originCountry",
+			"postalCode": $."originPostalCode"
+		},
+        {
+            "stopType": "DELIVERY",
+			"stopNumber": 1,
+			"locationName": $."finalDestinationName",
+			"locationAddress1": $."finalDestinationAddress",
+			"city": $."finalDestinationCity",
+			"state": $."finalDestinationState",
+			"country": $."finalDestinationCountry",
+			"postalCode": $."finalDestinationPostalCode"
+		}],
+    "deliverySchedule":{
+        "cutOffDate": if (( $."ShipmentType"=="EXPORT") and (($."cutOffDate")!=null)) ($."cutOffDate" as LocalDateTime {format: "M/d/yyyy H:m"} as String {format: "yyyy-MM-dd"}) else null,
+	"documentationCutOffDate": if (( $."ShipmentType"=="EXPORT") and (($."documentationCutoffDate")!=null)) ($."documentationCutOffDate" as LocalDateTime {format: "M/d/yyyy H:m"} as String {format: "yyyy-MM-dd"}) else null,
+    "plannedPickup": $."scheduledPickupDate" as LocalDateTime {format: "M/d/yyyy H:m"} as String {format: "yyyy-MM-dd"},
+    "plannedVesselDeparture": if($."plannedVesselDeparture" != null) ($."plannedVesselDeparture" as LocalDateTime {format: "M/d/yyyy H:m"} as String {format: "yyyy-MM-dd"}) else null,
+    "scheduledDeliveryDate": if($."scheduledDeliveryDate" != null) ($."scheduledDeliveryDate" as LocalDateTime {format: "M/d/yyyy H:m"} as String {format: "yyyy-MM-dd"}) else null,
+    "bondedMove": $."bondedMove" default false,
+    "fumigationRequestedAt":$."fumigationRequestedAt"
+	
+	/*cutOffDate: if (( $."Shipment Type"=="Export") and (($."Cut-off Date")!=null)) ($."Cut-off Date") else null,
+	documentationCutOffDate: if (( $."Shipment Type"=="Export") and (($."Documentation Cut-off Date")!=null)) ($."Documentation Cut-off Date") else null*/
+	}
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="CWM-sapi" doc:id="02f92af2-10ae-4ae9-a5ed-30127ee14d02" name="delivery-order-to-cwm-sapi" />
+		<flow-ref doc:name="mile-log:success-response-received" doc:id="3558f409-9cc2-4e4d-94dd-f47719daf340" name="mile-log:success-response-received"/>
+		<ee:transform doc:name="Success Response Received" doc:id="bcc4cea7-ed38-4231-811b-b189ec0f5060" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload..payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
